@@ -155,7 +155,8 @@ static void astal_wp_stream_properties_changed(AstalWpStream *self) {
     WpNode *node;
     g_object_get(G_OBJECT(self), "node", &node, NULL);
     WpPipewireObject *pwo = WP_PIPEWIRE_OBJECT(node);
-
+    AstalWpWp *wp;
+    g_object_get(self, "wp", &wp, NULL);
     const gchar *value;
 
     value = wp_pipewire_object_get_property(pwo, "media.icon-name");
@@ -176,6 +177,20 @@ static void astal_wp_stream_properties_changed(AstalWpStream *self) {
     if (category != self->media_category) {
         self->media_category = category;
         g_object_notify(G_OBJECT(self), "media-category");
+    }
+
+    value = wp_pipewire_object_get_property(pwo, "node.target");
+    gint id;
+    if (value == NULL) {
+        id = -1;
+    } else {
+        id = g_ascii_strtoll(value, NULL, 10);
+    }
+    AstalWpNode *target_node = astal_wp_wp_get_node(wp, id);
+    if (target_node != NULL && astal_wp_node_get_serial(target_node) != self->target_serial) {
+        self->target_serial = astal_wp_node_get_serial(target_node);
+        g_object_notify(G_OBJECT(self), "target-serial");
+        g_object_notify(G_OBJECT(self), "target-endpoint");
     }
 }
 
