@@ -158,6 +158,10 @@ public class Command : Object {
             throw new ParseError.MISSING_ARGS("expected at least %u arguments, got %u".printf(min_args, parsed_args.length));
         }
 
+        if ((max_args == 0) && (parsed_args.length > 0)) {
+            throw new ParseError.UNKNOWN_COMMAND(@"unknown command: $(parsed_args[0])");
+        }
+
         if (parsed_args.length > max_args) {
             throw new ParseError.EXTRA_ARGS("expected at most %u arguments, got %u".printf(max_args, parsed_args.length));
         }
@@ -273,6 +277,8 @@ public class Command : Object {
  * Possible errors on [method@Command.parse].
  */
 public errordomain ParseError {
+    /** An unknown command was encountered. */
+    UNKNOWN_COMMAND,
     /** Number of arguments is less than expected. */
     MISSING_ARGS,
     /** Number of arguments is more than expected. */
