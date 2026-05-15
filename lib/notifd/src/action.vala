@@ -3,10 +3,10 @@
  */
 public class AstalNotifd.Action : Object {
     /** ID of this action. */
-    public string id { construct set; get; default = "1"; }
+    public string id { construct; get; default = "1"; }
 
     /** Label displayed to the user for this action. */
-    public string label { construct set; get; default = ""; }
+    public string label { construct; get; default = ""; }
 
     /** Emitted when the notification this action was added to invoked this action. */
     public signal void invoked();

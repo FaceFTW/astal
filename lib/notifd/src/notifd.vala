@@ -12,11 +12,13 @@ public Notifd get_default() {
  *
  * This class queues up to become the next daemon while acting as a proxy in the meantime.
  */
-public class AstalNotifd.Notifd : Object {
+public class AstalNotifd.Notifd : Object, ListModel {
     internal static Settings settings;
 
-    private List<weak Notification> fallback_list = new List<weak Notification>();
+    private List<weak Notification> notification_list = new List<weak Notification>();
+
     private static Notifd _instance;
+    private Notifd() {}
 
     /**
      * Get the singleton instance.
@@ -65,7 +67,7 @@ public class AstalNotifd.Notifd : Object {
         get {
             if (proxy != null) return proxy.notifications;
             if (daemon != null) return daemon.notifications;
-            return fallback_list;
+            return notification_list;
         }
     }
 
@@ -85,7 +87,7 @@ public class AstalNotifd.Notifd : Object {
      * @param replaced Indicates whether an existing notification was replaced.
      */
     public signal void notified(uint id, bool replaced) {
-        notify_property("notifications");
+        sync_notifications();
     }
 
     /**
@@ -95,7 +97,65 @@ public class AstalNotifd.Notifd : Object {
      * @param reason The reason the notification was resolved.
      */
     public signal void resolved(uint id, ClosedReason reason) {
+        sync_notifications();
+    }
+
+    private void sync_notifications() {
+        List<weak Notification> next = notifications.copy();
+
+        uint position = 0;
+        var previous_length = notification_list.length();
+        var next_length = next.length();
+        while (
+            position < previous_length &&
+            position < next_length &&
+            notification_list.nth_data(position) == next.nth_data(position)
+        ) {
+            position++;
+        }
+
+        var previous_end = previous_length;
+        var next_end = next_length;
+        while (
+            previous_end > position &&
+            next_end > position &&
+            notification_list.nth_data(previous_end - 1) == next.nth_data(next_end - 1)
+        ) {
+            previous_end--;
+            next_end--;
+        }
+
+        notification_list = (owned)next;
+
+        if ((position < previous_end) || (position < next_end)) {
+            items_changed(
+                position,
+                previous_end - position,
+                next_end - position
+            );
+        }
+
         notify_property("notifications");
+    }
+
+    public Object? get_item(uint position) {
+        if ((proxy != null) && (position < proxy.notifications.length())) {
+            return proxy.notifications.nth_data(position);
+        }
+        if ((daemon != null) && (position < daemon.notifications.length())) {
+            return daemon.notifications.nth_data(position);
+        }
+        return null;
+    }
+
+    public Type get_item_type() {
+        return typeof(Notification);
+    }
+
+    public uint get_n_items() {
+        if (proxy != null) return proxy.notifications.length();
+        if (daemon != null) return daemon.notifications.length();
+        return 0;
     }
 
     class construct {
@@ -162,6 +222,7 @@ public class AstalNotifd.Notifd : Object {
         }
         daemon.notified.connect((id, replaced) => notified(id, replaced));
         daemon.resolved.connect((id, reason) => resolved(id, reason));
+        items_changed(0, 0, notifications.length());
         active();
     }
 
@@ -169,6 +230,7 @@ public class AstalNotifd.Notifd : Object {
         proxy = new Proxy();
         proxy.notified.connect((id, replaced) => notified(id, replaced));
         proxy.resolved.connect((id, reason) => resolved(id, reason));
+        items_changed(0, 0, notifications.length());
         active();
     }
 }
