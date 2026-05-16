@@ -11,6 +11,8 @@ public class Command : Object {
     }
 
     internal HashTable<string, Command> subcommands = new HashTable<string, Command>(str_hash, str_equal);
+    internal Command[] subcommand_list = {};
+
     internal Opt[] opts = {};
 
     private HashTable<char, Opt> shorts = new HashTable<char, Opt>(direct_hash, direct_equal);
@@ -56,7 +58,9 @@ public class Command : Object {
      * Append a subcommand to this command.
      */
     public Command subcommand (Command command) requires(command.name != null && command.parent == null) {
-        subcommands.set(command.name, command);
+        if (subcommands.set(command.name, command)) {
+            subcommand_list += command;
+        }
         command.parent = this;
         return this;
     }

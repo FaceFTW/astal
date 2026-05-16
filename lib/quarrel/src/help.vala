@@ -85,13 +85,13 @@ private void command_arguments (Command command, StringBuilder builder) {
 private void command_subcommands (Command command, StringBuilder builder) {
     var max_length = 0;
 
-    foreach (var cmd in command.subcommands.get_values()) {
+    foreach (var cmd in command.subcommand_list) {
         if (cmd.name.length > max_length) {
             max_length = cmd.name.length;
         }
     }
 
-    foreach (var cmd in command.subcommands.get_values()) {
+    foreach (var cmd in command.subcommand_list) {
         builder.append(@"\n$(INDENT)$(bold(cmd.name))");
 
         if (cmd.about_text != null) {
