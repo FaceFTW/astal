@@ -1,0 +1,24 @@
+option(
+  'lib',
+  type: 'boolean',
+  value: true,
+)
+
+option(
+  'cli',
+  type: 'boolean',
+  value: true,
+)
+
+option(
+  'brightness-backend',
+  type: 'combo',
+  choices: ['UDEV', 'LOGIND'],
+  value: 'LOGIND',
+)
+
+option(
+  'udevdir',
+  type: 'string',
+  value: '',
+)
