@@ -64,6 +64,7 @@ def _valadoc(name: str, gir: str, pkgs: str, sources: list[str]):
         *["-o", "docs"],
         *["--package-name", name],
         *["--gir", gir],
+        "--force",
         *[f"--pkg={pkg}" for pkg in pkglist if pkg != ""],
         *sources,
     ]
