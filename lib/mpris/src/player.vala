@@ -6,26 +6,13 @@
 public class AstalMpris.Player : Object {
     private static string COVER_CACHE = Environment.get_user_cache_dir() + "/astal/mpris";
 
-    private string _busname = "";
     private PlayerProxy? proxy;
     private uint pollid = 0; // periodically notify position
 
     /**
-     * Full dbus nama of this player.
+     * Full dbus name of this player.
      */
-    public string bus_name {
-        get { return _busname; }
-        private set {
-            _busname = value;
-            init_proxy.begin(value, (_, res) => {
-                try {
-                    init_proxy.end(res);
-                } catch (Error error) {
-                    critical(error.message);
-                }
-            });
-        }
-    }
+    public string bus_name { get; construct; }
 
     /**
      * Indicates if [property@AstalMpris.Player:bus_name] is available on dbus.
@@ -535,13 +522,35 @@ public class AstalMpris.Player : Object {
      * @param name dbus name of the player.
      */
     public Player(string name) {
-        bus_name = name.has_prefix(MediaPlayerProxy.PREFIX)
+        var bus_name = name.has_prefix(MediaPlayerProxy.PREFIX)
             ? name : MediaPlayerProxy.PREFIX + name;
+
+        Object(bus_name : bus_name);
+        init_proxy.begin((_, res) => {
+            try {
+                init_proxy.end(res);
+            } catch (Error error) {
+                critical(error.message);
+            }
+        });
     }
 
-    internal async Player.async(string busname) throws Error {
-        _busname = busname;
-        yield init_proxy(busname);
+    /**
+     * Async version of [ctor@AstalMpris.Player.new] that yields after the player is fully initialized.
+     * Note that if the player is not avaiable on the session bus properties will have empty values.
+     *
+     * @param name dbus name of the player.
+     */
+    public static async Player new_async(string name) throws Error {
+        return yield new Player.internal_new_async(name);
+    }
+
+    private async Player.internal_new_async(string name) throws Error {
+        var bus_name = name.has_prefix(MediaPlayerProxy.PREFIX)
+            ? name : MediaPlayerProxy.PREFIX + name;
+
+        Object(bus_name : bus_name);
+        yield init_proxy();
     }
 
     private void sync(Variant props) {
@@ -774,10 +783,10 @@ public class AstalMpris.Player : Object {
         }
     }
 
-    private async void init_proxy(string busname) throws Error {
+    private async void init_proxy() throws Error {
         if (proxy != null) return;
 
-        proxy = yield PlayerProxy.new(busname);
+        proxy = yield PlayerProxy.new(bus_name);
 
         if (proxy.g_name_owner != null) {
             yield on_appeared();
@@ -808,5 +817,6 @@ public class AstalMpris.Player : Object {
             Source.remove(pollid);
             pollid = 0;
         }
+        proxy = null;
     }
 }

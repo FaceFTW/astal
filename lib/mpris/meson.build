@@ -39,7 +39,6 @@ deps = [
   dependency('glib-2.0'),
   dependency('gio-2.0'),
   dependency('gobject-2.0'),
-  dependency('json-glib-1.0'),
 ]
 
 sources = [config] + files(
@@ -105,10 +104,15 @@ if get_option('lib')
 endif
 
 if get_option('cli')
+  cli_deps = deps + [
+    dependency('quarrel-0.1'),
+    dependency('json-glib-1.0'),
+  ]
+
   executable(
     name,
     ['src/cli.vala', sources],
-    dependencies: deps,
+    dependencies: cli_deps,
     install: true,
   )
 endif

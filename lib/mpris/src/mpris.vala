@@ -13,6 +13,7 @@ public Mpris get_default() {
 public class AstalMpris.Mpris : Object, ListModel {
     private static Mpris? instance;
     private BusProxy? proxy;
+    private Mpris() {}
 
     /**
      * Gets the default singleton Mpris instance.
