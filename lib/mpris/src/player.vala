@@ -293,7 +293,7 @@ public class AstalMpris.Player : Object {
     /**
      * The current loop/repeat status.
      */
-    [CCode (notify = false)]
+    [CCode(notify = false)]
     public Loop loop_status {
         get { return _loop_status; }
         set { _set_loop_status(value); }
@@ -315,7 +315,7 @@ public class AstalMpris.Player : Object {
     /**
      * The current shuffle status.
      */
-    [CCode (notify = false)]
+    [CCode(notify = false)]
     public Shuffle shuffle_status {
         get { return _shuffle_status; }
         set { _set_shuffle_status(value); }
@@ -335,7 +335,7 @@ public class AstalMpris.Player : Object {
     /**
      * The current playback rate.
      */
-    [CCode (notify = false)]
+    [CCode(notify = false)]
     public double rate {
         get { return _rate; }
         set { _set_rate(value); }
@@ -355,7 +355,7 @@ public class AstalMpris.Player : Object {
     /**
      * The current volume level between 0 and 1 or -1 when it is unsupported.
      */
-    [CCode (notify = false)]
+    [CCode(notify = false)]
     public double volume {
         get { return _volume; }
         set { _set_volume(value); }
@@ -376,7 +376,7 @@ public class AstalMpris.Player : Object {
      * The current position of the track in seconds or -1 when it is unsupported.
      * To get a progress percentage simply divide this with [property@AstalMpris.Player:length].
      */
-    [CCode (notify = false)]
+    [CCode(notify = false)]
     public double position {
         get { return _position; }
         set { _set_position(value); }
