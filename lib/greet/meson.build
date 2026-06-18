@@ -43,7 +43,9 @@ deps = [
 ]
 
 sources = [config] + files(
-  'src/client.vala',
+  'src/greeter.vala',
+  'src/login.vala',
+  'src/model.vala',
 )
 
 if get_option('lib')
@@ -106,10 +108,15 @@ if get_option('lib')
 endif
 
 if get_option('cli')
+  cli_deps = deps + [
+    dependency('quarrel-0.1'),
+    meson.get_compiler('vala').find_library('posix'),
+  ]
+
   executable(
     name,
     ['src/cli.vala', sources],
-    dependencies: deps,
+    dependencies: cli_deps,
     install: true,
   )
 endif

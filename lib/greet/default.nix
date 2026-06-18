@@ -1,15 +1,18 @@
 {
   mkAstalPkg,
   pkgs,
-  ...
-}:
-mkAstalPkg {
-  pname = "astal-greet";
-  src = ./.;
-  packages = [pkgs.json-glib];
+  self,
+}: let
+  inherit (pkgs.stdenv.hostPlatform) system;
+  inherit (self.packages.${system}) quarrel;
+in
+  mkAstalPkg {
+    pname = "astal-greet";
+    src = ./.;
+    packages = [pkgs.json-glib quarrel];
 
-  libname = "greet";
-  authors = "Aylur";
-  name = "AstalGreet";
-  description = "IPC client for greetd";
-}
+    libname = "greet";
+    authors = "Aylur";
+    name = "AstalGreet";
+    description = "IPC client for greetd";
+  }

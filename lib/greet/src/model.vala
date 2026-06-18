@@ -1,62 +1,9 @@
 namespace AstalGreet {
 /**
- * Shorthand for creating a session, posting the password,
- * and starting the session with the given `cmd`
- * which is parsed with [func@GLib.shell_parse_argv].
- *
- * @param username User to login to
- * @param password Password of the user
- * @param cmd Command to start the session with
- */
-public async void login(
-    string username,
-    string password,
-    string cmd
-) throws GLib.Error {
-    yield login_with_env(username, password, cmd, {});
-}
-
-/**
- * Same as [func@AstalGreet.login] but allow for setting additonal env
- * in the form of `name=value` pairs.
- *
- * @param username User to login to
- * @param password Password of the user
- * @param cmd Command to start the session with
- * @param env Additonal env vars to set for the session
- */
-public async void login_with_env(
-    string username,
-    string password,
-    string cmd,
-    string[] env
-) throws GLib.Error {
-    string[] argv;
-    Shell.parse_argv(cmd, out argv);
-    try {
-        yield new CreateSession(username).send();
-        yield new PostAuthMesssage(password).send();
-        yield new StartSession(argv, env).send();
-    } catch (GLib.Error err) {
-        yield new CancelSession().send();
-        throw err;
-    }
-}
-
-/**
  * Base Request type.
  */
 public abstract class Request : Object {
-    protected abstract string type_name { get; }
-
-    private string serialize() {
-        var node = Json.gobject_serialize(this);
-        var obj = node.get_object();
-        obj.set_string_member("type", obj.get_string_member("type-name"));
-        obj.remove_member("type-name");
-
-        return Json.to_string(node, false);
-    }
+    protected abstract Json.Node payload();
 
     private int bytes_to_int(Bytes bytes) {
         uint8[] data = (uint8[])bytes.get_data();
@@ -81,7 +28,7 @@ public abstract class Request : Object {
         var addr = new UnixSocketAddress(sock);
         var socket = new SocketClient();
         var conn = socket.connect(addr);
-        var payload = serialize();
+        var payload = Json.to_string(payload(), false);
         var ostream = new DataOutputStream(conn.get_output_stream()) {
             byte_order = DataStreamByteOrder.HOST_ENDIAN,
         };
@@ -108,51 +55,84 @@ public abstract class Request : Object {
             case Success.TYPE: return new Success(obj);
             case Error.TYPE: return new Error(obj);
             case AuthMessage.TYPE: return new AuthMessage(obj);
-            default: throw new IOError.NOT_FOUND("unknown response type");
+            default: assert_not_reached();
         }
     }
 }
 
 /**
- * Creates a session and initiates a login attempted for the given user.
+ * Creates a session and initiates a login attempt for the given user.
  * The session is ready to be started if a success is returned.
  */
 public class CreateSession : Request {
-    protected override string type_name { get { return "create_session"; } }
     public string username { get; set; }
 
     public CreateSession(string username) {
         Object(username: username);
     }
-}
 
-/**
- * Answers an authentication message.
- * If the message was informative (info, error),
- * then a response does not need to be set in this message.
- * The session is ready to be started if a success is returned.
- */
-public class PostAuthMesssage : Request {
-    protected override string type_name { get { return "post_auth_message_response"; } }
-    public string response { get; set; }
-
-    public PostAuthMesssage(string response) {
-        Object(response: response);
+    protected override Json.Node payload() {
+        return new Json.Builder().begin_object()
+            .set_member_name("type").add_string_value("create_session")
+            .set_member_name("username").add_string_value(username)
+            .end_object().get_root();
     }
 }
 
 /**
- * Requests for the session to be started using the provided command line,
- * adding the supplied environment to that created by PAM.
- * The session will start after the greeter process terminates
+ * Responds to an authentication message.
+ * If the message is informational (info or error),
+ * then this message does not need a response.
+ * The session is ready to be started if a success is returned.
+ */
+public class PostAuthMessage : Request {
+    public string? response { get; set; }
+
+    public PostAuthMessage(string? response) {
+        Object(response: response);
+    }
+
+    protected override Json.Node payload() {
+        var builder = new Json.Builder().begin_object()
+            .set_member_name("type").add_string_value("post_auth_message_response");
+
+        if (response != null) {
+            builder.set_member_name("response").add_string_value(response);
+        }
+
+        return builder.end_object().get_root();
+    }
+}
+
+/**
+ * Requests that the session be started using the provided command line,
+ * adding the supplied environment to the environment created by PAM.
+ * The session will start after the greeter process terminates.
  */
 public class StartSession : Request {
-    protected override string type_name { get { return "start_session"; } }
     public string[] cmd { get; set; }
     public string[] env { get; set; }
 
     public StartSession(string[] cmd, string[] env = {}) {
         Object(cmd: cmd, env: env);
+    }
+
+    protected override Json.Node payload() {
+        var _cmd = new Json.Builder().begin_array();
+        foreach (var value in cmd) {
+            _cmd.add_string_value(value);
+        }
+
+        var _env = new Json.Builder().begin_array();
+        foreach (var value in env) {
+            _env.add_string_value(value);
+        }
+
+        return new Json.Builder().begin_object()
+            .set_member_name("type").add_string_value("start_session")
+            .set_member_name("cmd").add_value(_cmd.end_array().get_root())
+            .set_member_name("env").add_value(_env.end_array().get_root())
+            .end_object().get_root();
     }
 }
 
@@ -160,7 +140,11 @@ public class StartSession : Request {
  * Cancels the session that is currently under configuration.
  */
 public class CancelSession : Request {
-    internal override string type_name { get { return "cancel_session"; } }
+    protected override Json.Node payload() {
+        return new Json.Builder().begin_object()
+            .set_member_name("type").add_string_value("cancel_session")
+            .end_object().get_root();
+    }
 }
 
 /**
@@ -182,7 +166,7 @@ public class Success : Response {
 }
 
 /**
- * Indicates that the request succeeded.
+ * Indicates that the request failed.
  */
 public class Error : Response {
     internal const string TYPE = "error";
@@ -197,28 +181,25 @@ public class Error : Response {
          * A general error.
          * See the error description for more information.
          */
-        ERROR;
-
-        internal static Type from_string(string str) throws IOError {
-            switch (str) {
-                case "auth_error": return Type.AUTH_ERROR;
-                case "error": return Type.ERROR;
-                default: throw new IOError.FAILED(@"unknown error_type: $str");
-            }
-        }
+        ERROR,
     }
 
     public Type error_type { get; private set; }
     public string description { get; private set; }
 
-    internal Error(Json.Object obj) throws IOError {
-        error_type = Type.from_string(obj.get_string_member("error_type"));
+    internal Error(Json.Object obj) {
         description = obj.get_string_member("description");
+
+        switch (obj.get_string_member("error_type")) {
+            case "auth_error": error_type = AUTH_ERROR; break;
+            case "error": error_type = Type.ERROR; break;
+            default: assert_not_reached();
+        }
     }
 }
 
 /**
- * Indicates that the request succeeded.
+ * Indicates that the request returned an authentication message.
  */
 public class AuthMessage : Response {
     internal const string TYPE = "auth_message";
@@ -241,25 +222,22 @@ public class AuthMessage : Response {
         /**
          * Indicates that this message is an error, not a question.
          */
-        ERROR;
-
-        internal static Type from_string(string str) throws IOError {
-            switch (str) {
-                case "visible": return VISIBLE;
-                case "secret": return Type.SECRET;
-                case "info": return Type.INFO;
-                case "error": return Type.ERROR;
-                default: throw new IOError.FAILED(@"unknown message_type: $str");
-            }
-        }
+        ERROR,
     }
 
     public Type message_type { get; private set; }
     public string message { get; private set; }
 
-    internal AuthMessage(Json.Object obj) throws IOError {
-        message_type = Type.from_string(obj.get_string_member("auth_message_type"));
+    internal AuthMessage(Json.Object obj) {
         message = obj.get_string_member("auth_message");
+
+        switch (obj.get_string_member("auth_message_type")) {
+            case "visible": message_type = VISIBLE; break;
+            case "secret": message_type = SECRET; break;
+            case "info": message_type = INFO; break;
+            case "error": message_type = ERROR; break;
+            default: assert_not_reached();
+        }
     }
 }
 }

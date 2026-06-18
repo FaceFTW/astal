@@ -1,72 +1,111 @@
-static bool help;
-static bool version;
-static string username;
-static string password;
-static string cmd;
-[CCode(array_length = false, array_null_terminated = true)]
-static string[] env;
+using Quarrel;
 
-const OptionEntry[] options = {
-    { "version", 'v', OptionFlags.NONE, OptionArg.NONE, ref version, null, null },
-    { "help", 'h', OptionFlags.NONE, OptionArg.NONE, ref help, null, null },
-    { "username", 'u', OptionFlags.NONE, OptionArg.STRING, ref username, null, null },
-    { "password", 'p', OptionFlags.NONE, OptionArg.STRING, ref password, null, null },
-    { "cmd", 'c', OptionFlags.NONE, OptionArg.STRING, ref cmd, null, null },
-    { "env", 'e', OptionFlags.NONE, OptionArg.STRING_ARRAY, ref env, null, null },
-    { null },
-};
+static SpecialFlag help;
+static SpecialFlag version;
+static SpecialFlag interactive;
+static StringArrayOpt env;
+
+int err(string msg) {
+    printerr(@"\x1b[1;31merror:\x1b[0m $msg\n");
+    return 1;
+}
 
 async int main(string[] argv) {
+    var cmd = new Command("astal-greet")
+        .about("IPC client for greetd")
+        .opt(help = new SpecialFlag("help", 'h', "Print help and exit"))
+        .opt(version = new SpecialFlag("version", 'v', "Print version and exit"))
+        .opt(interactive = new SpecialFlag("interactive", 'i', "Interactive login flow"))
+        .opt(env = new StringArrayOpt("env", 'e', "Additional environment variables to set for the session") {
+        name = "NAME=VALUE"
+    })
+        .required_arg("USERNAME", "User to log in as")
+        .required_arg("PASSWORD", "Password of the user")
+        .required_arg("CMD", "Command used to start the session")
+    ;
+
     try {
-        var opts = new OptionContext();
-        opts.add_main_entries(options, null);
-        opts.set_help_enabled(false);
-        opts.set_ignore_unknown_options(false);
-        opts.parse(ref argv);
-    } catch (OptionError err) {
-        printerr(err.message);
+        cmd.parse(argv);
+    } catch (ParseError error) {
+        err(error.message);
         return 1;
     }
 
-    if (help) {
-        print("Usage:\n");
-        print("    %s [flags]\n\n", argv[0]);
-        print("Flags:\n");
-        print("    -h, --help        Print this help and exit\n");
-        print("    -v, --version     Print version number and exit\n");
-        print("    -u, --username    User to login to\n");
-        print("    -p, --password    Password of the user\n");
-        print("    -c, --cmd         Command to start the session with\n");
-        print("    -e, --env         Additional env vars to set for the session\n");
+    if (help.enabled) {
+        print("%s\n", Quarrel.help(cmd));
         return 0;
     }
 
-    if (version) {
-        printerr(AstalGreet.VERSION);
+    if (version.enabled) {
+        print("%s\n", AstalGreet.VERSION);
         return 0;
     }
 
-    if (username == null) {
-        printerr("missing username\n");
-        return 1;
-    }
-
-    if (password == null) {
-        printerr("missing password\n");
-        return 1;
-    }
-
-    if (cmd == null) {
-        printerr("missing cmd\n");
-        return 1;
+    if (interactive.enabled) {
+        interactive_loop(cmd);
+        return 0;
     }
 
     try {
-        yield AstalGreet.login_with_env(username, password, cmd, env);
-    } catch (Error err) {
-        printerr(err.message);
-        return 1;
+        yield AstalGreet.login_with_env(cmd.args[0], cmd.args[1], cmd.args[2], env.value);
+    } catch (Error error) {
+        err(error.message);
     }
 
     return 0;
+}
+
+void interactive_loop(Command cmd) {
+    var loop = new MainLoop(null, false);
+    var greeter = new AstalGreet.Greeter();
+
+    greeter.visible_request.connect((message) => {
+        stdout.printf("%s\n", message);
+        greeter.post_auth(stdin.read_line());
+    });
+
+    // TODO: hide input
+    greeter.secret_request.connect((message) => {
+        stdout.printf("%s\n", message);
+        greeter.post_auth(stdin.read_line());
+    });
+
+    greeter.info_message.connect((message) => {
+        stdout.printf("%s\n", message);
+    });
+
+    greeter.error_message.connect((message) => {
+        stdout.printf("%s\n", message);
+    });
+
+    greeter.cancelled.connect((error) => {
+        stdout.printf("%s\n", error.description);
+        stdout.printf("%s\n", "Username:");
+        greeter.create_session(stdin.read_line());
+    });
+
+    greeter.authenticated.connect(() => {
+        var parsing = true;
+
+        while (parsing) {
+            try {
+                stdout.printf("%s\n", "Command:");
+                var cmdline = stdin.read_line();
+                string[] argv;
+                Shell.parse_argv(cmdline, out argv);
+                greeter.start_session.begin(argv, env.value, (_, res) => {
+                    greeter.start_session.end(res);
+                    loop.quit();
+                });
+                parsing = false;
+            } catch (Error error) {
+                stdout.printf("%s\n", error.message);
+            }
+        }
+    });
+
+    stdout.printf("%s\n", "Username:");
+    greeter.create_session(stdin.read_line());
+
+    loop.run();
 }
