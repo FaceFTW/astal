@@ -777,7 +777,7 @@ public class AstalMpris.Player : Object {
         try {
             if (art_url.has_prefix("http")) {
                 yield copy_http_image(target);
-            } else if (art_url.has_prefix("data:image")) {
+            } else if (art_url.has_prefix("data:image") && art_url.contains(";base64,")) {
                 yield copy_base64_image(target);
             } else {
                 yield copy_image(target);
