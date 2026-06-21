@@ -11,7 +11,8 @@ in
     src = ./.;
     packages = [
       quarrel
-      pkgs.gvfs
+      pkgs.libsoup_3
+      pkgs.gdk-pixbuf
       pkgs.json-glib
     ];
 

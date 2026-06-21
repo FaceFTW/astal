@@ -39,6 +39,8 @@ deps = [
   dependency('glib-2.0'),
   dependency('gio-2.0'),
   dependency('gobject-2.0'),
+  dependency('libsoup-3.0'),
+  dependency('gdk-pixbuf-2.0'),
 ]
 
 sources = [config] + files(
@@ -67,6 +69,10 @@ if get_option('lib')
       files('gir.py'),
       '--name', name,
       '--gir', gir_name,
+      '--pkgs', ':'.join(
+        'libsoup-3.0',
+        'gdk-pixbuf-2.0',
+      ),
       '--property', 'Mpris.players',
       sources,
     ],

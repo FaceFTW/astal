@@ -453,7 +453,8 @@ public class AstalMpris.Player : Object {
 
     /**
      * The location of an image representing the track or album.
-     * You might prefer using [property@AstalMpris.Player:cover_art].
+     * You might prefer using [property@AstalMpris.Player:cover_art]
+     * which is guaranteed to be a local file path when `art_url` exists.
      */
     public string art_url { get; private set; default = ""; }
 
@@ -673,7 +674,7 @@ public class AstalMpris.Player : Object {
             var _composer = meta.lookup_value("xesam:composer", VariantType.STRING_ARRAY);
             composer = (_composer != null) ? strv_join(_composer, ", ") : "";
 
-            cache_cover.begin(null);
+            load_cover_art.begin(null);
             metadata = meta;
         }
     }
@@ -688,45 +689,89 @@ public class AstalMpris.Player : Object {
         return builder.str;
     }
 
-    private async void cache_cover() {
+    private async void copy_http_image(File target) throws Error  {
+        var session = new Soup.Session();
+        var message = new Soup.Message("GET", art_url);
+
+        var bytes = yield session.send_and_read_async(
+            message,
+            Priority.DEFAULT,
+            null
+        );
+
+        yield target.replace_contents_async(
+            bytes.get_data(),
+            null,
+            false,
+            FileCreateFlags.NONE,
+            null,
+            null
+        );
+    }
+
+    private async static void copy_image(File source, File target) throws Error {
+        yield source.copy_async(
+            target,
+            FileCopyFlags.NONE,
+            Priority.DEFAULT,
+            null,
+            null
+        );
+    }
+
+    private static async bool query_exists(File file) {
+        try {
+            yield file.query_info_async(
+                FileAttribute.STANDARD_TYPE,
+                FileQueryInfoFlags.NONE,
+                Priority.DEFAULT,
+                null
+            );
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private async void load_cover_art() {
         if ((art_url == null) || (art_url == "")) {
             cover_art = "";
             return;
         }
 
-        var file = File.new_for_uri(art_url);
-        if (file.get_path() != null) {
-            cover_art = file.get_path();
+        var source = File.new_for_uri(art_url);
+        if (source.get_path() != null) {
+            cover_art = source.get_path();
             return;
         }
 
-        var path = COVER_CACHE + "/" + Checksum.compute_for_string(ChecksumType.SHA1, art_url, -1);
-        if (FileUtils.test(path, FileTest.EXISTS)) {
-            cover_art = path;
-            return;
-        }
+        var hash = Checksum.compute_for_string(ChecksumType.SHA1, art_url, -1);
+        var target = File.new_build_filename(COVER_CACHE, hash);
 
-        if (!FileUtils.test(COVER_CACHE, FileTest.IS_DIR)) {
-            try {
-                File.new_for_path(COVER_CACHE).make_directory_with_parents(null);
-            } catch (Error err) {
-                critical(err.message);
-                return;
-            }
+        if (yield query_exists(target)) {
+            cover_art = target.get_path();
+            return;
         }
 
         try {
-            yield file.copy_async(
-                File.new_for_path(path),
-                FileCopyFlags.OVERWRITE,
-                Priority.DEFAULT,
-                null,
-                null
-            );
-
-            cover_art = path;
+            File.new_for_path(COVER_CACHE).make_directory_with_parents(null);
+        } catch (IOError.EXISTS err) {
+            // no-op
         } catch (Error err) {
-            critical("Failed to cache cover art with url \"%s\": %s", art_url, err.message);
+            critical(err.message);
+            return;
+        }
+
+        try {
+            if (art_url.has_prefix("http")) {
+                yield copy_http_image(target);
+            } else {
+                yield copy_image(source, target);
+            }
+            cover_art = target.get_path();
+        } catch (Error err) {
+            critical(@"failed to copy '$art_url': $(err.message)");
         }
     }
 
@@ -775,7 +820,7 @@ public class AstalMpris.Player : Object {
             sync(yield proxy.get_all(MediaPlayerProxy.NAME));
             sync(yield proxy.get_all(PlayerProxy.NAME));
             yield check_position();
-            yield cache_cover();
+            yield load_cover_art();
             available = true;
             init_position_poll();
         } catch (Error error) {

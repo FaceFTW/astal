@@ -57,31 +57,20 @@ if (spotify.available) print(spotify.title);
 
 ## Installation
 
-> [!WARNING]
->
-> In order for network cover art urls to be cached (spotify for example) make
-> sure `gvfs` is enabled.
->
-> :::code-group
->
-> ```nix [<i class="devicon-nixos-plain"></i> configuration.nix]
-> services.gvfs.enable = true;
-> ```
-
 1. install dependencies
 
     :::code-group
 
     ```sh [<i class="devicon-archlinux-plain"></i> Arch]
-    sudo pacman -Syu meson vala valadoc gvfs json-glib gobject-introspection
+    sudo pacman -Syu meson vala valadoc json-glib gobject-introspection gdk-pixbuf2 libsoup3
     ```
 
     ```sh [<i class="devicon-fedora-plain"></i> Fedora]
-    sudo dnf install meson vala valadoc gvfs json-glib-devel gobject-introspection-devel
+    sudo dnf install meson vala valadoc json-glib-devel gobject-introspection-devel gdk-pixbuf2-devel libsoup3-devel
     ```
 
     ```sh [<i class="devicon-ubuntu-plain"></i> Ubuntu]
-    sudo apt install meson valac valadoc gvfs libjson-glib-dev gobject-introspection
+    sudo apt install meson valac valadoc libjson-glib-dev gobject-introspection libgdk-pixbuf-2.0-dev libsoup-3.0-dev
     ```
 
     :::
