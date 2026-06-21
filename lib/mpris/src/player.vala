@@ -709,11 +709,22 @@ public class AstalMpris.Player : Object {
         );
     }
 
-    private async static void copy_image(File source, File target) throws Error {
-        yield source.copy_async(
+    private async void copy_image(File target) throws Error {
+        yield File.new_for_uri(art_url).copy_async(
             target,
             FileCopyFlags.NONE,
             Priority.DEFAULT,
+            null,
+            null
+        );
+    }
+
+    private async void copy_base64_image(File target) throws Error {
+        yield target.replace_contents_async(
+            Base64.decode(art_url.substring(art_url.index_of(",") + 1)),
+            null,
+            false,
+            FileCreateFlags.NONE,
             null,
             null
         );
@@ -766,8 +777,10 @@ public class AstalMpris.Player : Object {
         try {
             if (art_url.has_prefix("http")) {
                 yield copy_http_image(target);
+            } else if (art_url.has_prefix("data:image")) {
+                yield copy_base64_image(target);
             } else {
-                yield copy_image(source, target);
+                yield copy_image(target);
             }
             cover_art = target.get_path();
         } catch (Error err) {
